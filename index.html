@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>T26 Yard Check</title>
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Yard Check">
+<meta name="theme-color" content="#0b5c8a">
+<link rel="apple-touch-icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -276,6 +282,9 @@ $("export").onclick = () => {
     toast("Excel file downloaded");
   }catch(e){ showNotice("Couldn't create the file. Try again, or use a different browser."); }
 };
+
+// ---------- offline ----------
+if("serviceWorker" in navigator && location.protocol==="https:"){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
 
 // ---------- boot ----------
 try{ const t=localStorage.getItem("t26-tab"); if(t) filter=t; }catch(e){}
