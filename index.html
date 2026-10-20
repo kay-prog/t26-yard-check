@@ -76,6 +76,18 @@ main .wrap{padding-block:12px 96px;display:grid;gap:8px}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
 footer .wrap{padding-block:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 footer .hint{font-size:13px;color:var(--muted);min-width:0;flex:1}
+.sheet{position:fixed;inset:0;z-index:15;background:rgba(10,20,30,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet .panel{background:var(--surface);color:var(--ink);width:100%;max-width:720px;max-height:90%;overflow:auto;border-radius:14px 14px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:grid;gap:14px}
+.panel h2{margin:0;font-size:18px}
+.panel h3{margin:0;font-size:15px}
+.panel p{margin:0;font-size:14px;color:var(--muted)}
+.panel section{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.panel textarea{width:100%;min-height:120px;font-family:var(--f-mono);font-size:15px;padding:10px;border:2px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);text-transform:uppercase}
+.panel textarea:focus{outline:none;border-color:var(--accent)}
+.panel .rowb{display:flex;gap:8px;flex-wrap:wrap}
+.panel .result{font-size:14px;padding:10px 12px;border-radius:6px;background:var(--bg);display:grid;gap:4px}
+.panel .result b{color:var(--seen)}
+.panel .result .w{color:var(--warn)}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 14px;border-radius:8px;font-size:15px;display:flex;gap:14px;align-items:center;z-index:20;max-width:calc(100% - 32px)}
 #toast button{font:inherit;font-weight:700;background:none;border:0;color:var(--accent);cursor:pointer;padding:0}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
@@ -108,8 +120,33 @@ footer .hint{font-size:13px;color:var(--muted);min-width:0;flex:1}
 
 <footer><div class="wrap">
   <span class="hint" id="hint">Press Enter to mark when only one container matches.</span>
-  <button type="button" class="btn primary" id="export">Download Excel</button>
+  <div class="rowb" style="display:flex;gap:8px">
+    <button type="button" class="btn" id="openSync">Copy / Paste marks</button>
+    <button type="button" class="btn primary" id="export">Download Excel</button>
+  </div>
 </div></footer>
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-labelledby="syncTitle">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <h2 id="syncTitle">Move marks between devices</h2>
+      <button type="button" class="btn" id="closeSync">Close</button>
+    </div>
+    <p>Each phone or PC keeps its own marks. Copy the list here, send it to yourself on WhatsApp or email, then paste it on the other device.</p>
+    <section>
+      <h3>1. Copy from this device</h3>
+      <p id="copyInfo"></p>
+      <div class="rowb"><button type="button" class="btn primary" id="copyBtn">Copy seen list</button></div>
+      <textarea id="copyText" readonly hidden aria-label="Seen list"></textarea>
+    </section>
+    <section>
+      <h3>2. Paste on the other device</h3>
+      <p>Paste container numbers, one per line or separated by spaces. They're added to what this device already has. Nothing gets unmarked.</p>
+      <textarea id="pasteText" placeholder="MEDU1000440&#10;MSBU3186550" aria-label="Paste container numbers" spellcheck="false" autocapitalize="characters"></textarea>
+      <div class="rowb"><button type="button" class="btn primary" id="pasteBtn">Mark these seen</button></div>
+      <div class="result" id="pasteResult" hidden></div>
+    </section>
+  </div>
+</div>
 <div id="toast" hidden></div>
 
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -252,6 +289,45 @@ $("form").addEventListener("submit", e => { e.preventDefault(); if(lastMatches.l
 $("clear").onclick = () => { $("q").value=""; render(); $("q").focus(); };
 $("tabs").addEventListener("click", e => { const b=e.target.closest("button"); if(!b) return; filter=b.dataset.f; try{localStorage.setItem("t26-tab",filter)}catch(_){} render(); });
 $("list").addEventListener("click", e => { const b=e.target.closest(".mark"); if(!b) return; const cn=b.dataset.cn; setSeen(cn, !seen[cn]); });
+
+// ---------- copy / paste between devices ----------
+function seenListText(){ return Object.keys(seen).sort().join("\n"); }
+$("openSync").onclick = () => {
+  const n = Object.keys(seen).length;
+  $("copyInfo").textContent = n ? `${n} container${n===1?"":"s"} marked on this device.` : "Nothing marked on this device yet.";
+  $("copyText").hidden = true; $("pasteResult").hidden = true;
+  $("sheet").hidden = false;
+};
+$("closeSync").onclick = () => { $("sheet").hidden = true; };
+$("sheet").addEventListener("click", e => { if(e.target.id==="sheet") $("sheet").hidden = true; });
+$("copyBtn").onclick = () => {
+  const txt = seenListText();
+  const ta = $("copyText"); ta.value = txt; ta.hidden = false;
+  const fallback = () => { ta.focus(); ta.select(); ta.setSelectionRange(0, txt.length); toast("Text selected. Tap Copy."); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>toast(`Copied ${Object.keys(seen).length} numbers`), fallback);
+  } else fallback();
+};
+$("pasteBtn").onclick = () => {
+  const toks = $("pasteText").value.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  const cns = [...new Set(toks.filter(x=>/^[A-Z]{4}\d{7}$/.test(x)))];
+  let added=0, already=0; const notList=[], badCd=[];
+  const now = new Date().toISOString();
+  cns.forEach(cn=>{
+    if(seen[cn]){ already++; return; }
+    if(!BY.has(cn)){ if(!checkDigit(cn)){ badCd.push(cn); return; } notList.push(cn); }
+    seen[cn] = {at:now, extra:!BY.has(cn)}; added++;
+  });
+  if(added && !saveLocal()) showNotice("This browser isn't saving your marks. Open the file in Chrome or Safari, not a file preview.");
+  render();
+  const skipped = toks.filter(x=>!/^[A-Z]{4}\d{7}$/.test(x));
+  const r = $("pasteResult"); r.hidden = false;
+  r.innerHTML = `<span><b>${added} marked seen</b>${already?` · ${already} already seen`:""}</span>`+
+    (notList.length?`<span class="w">${notList.length} not on the list, recorded under Not on list: ${notList.join(", ")}</span>`:"")+
+    (badCd.length?`<span class="w">Check digit wrong, not added: ${badCd.join(", ")}</span>`:"")+
+    (skipped.length?`<span>Ignored ${skipped.length} item${skipped.length===1?"":"s"} that aren't container numbers.</span>`:"");
+  if(added) $("pasteText").value = "";
+};
 
 // ---------- export ----------
 $("export").onclick = () => {
