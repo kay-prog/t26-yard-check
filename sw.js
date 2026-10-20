@@ -1,5 +1,5 @@
 // Keeps the yard check app available offline. Bump VERSION when index.html changes.
-const VERSION = "t26-yard-v1";
+const VERSION = "t26-yard-v2";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
